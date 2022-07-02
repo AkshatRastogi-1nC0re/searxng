@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>searx.locales &#8212; SearXNG Documentation (2022.07.02-94e0555c)</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/searxng.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/tabs.css" />
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/tabs.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">SearXNG Documentation (2022.07.02-94e0555c)</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">searx.locales</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for searx.locales</h1><div class="highlight"><pre>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="c1"># SPDX-License-Identifier: AGPL-3.0-or-later</span>
+<span class="c1"># lint: pylint</span>
+<span class="sd">&quot;&quot;&quot;Initialize :py:obj:`LOCALE_NAMES`, :py:obj:`RTL_LOCALES`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Set</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">pathlib</span>
+
+<span class="kn">from</span> <span class="nn">babel</span> <span class="kn">import</span> <span class="n">Locale</span>
+<span class="kn">from</span> <span class="nn">babel.support</span> <span class="kn">import</span> <span class="n">Translations</span>
+<span class="kn">import</span> <span class="nn">flask_babel</span>
+<span class="kn">import</span> <span class="nn">flask</span>
+<span class="kn">from</span> <span class="nn">flask.ctx</span> <span class="kn">import</span> <span class="n">has_request_context</span>
+<span class="kn">from</span> <span class="nn">searx</span> <span class="kn">import</span> <span class="n">logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span><span class="o">.</span><span class="n">getChild</span><span class="p">(</span><span class="s1">&#39;locales&#39;</span><span class="p">)</span>
+
+
+<span class="c1"># safe before monkey patching flask_babel.get_translations</span>
+<span class="n">_flask_babel_get_translations</span> <span class="o">=</span> <span class="n">flask_babel</span><span class="o">.</span><span class="n">get_translations</span>
+
+<span class="n">LOCALE_NAMES</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="sd">&quot;&quot;&quot;Mapping of locales and their description.  Locales e.g. &#39;fr&#39; or &#39;pt-BR&#39; (see</span>
+<span class="sd">:py:obj:`locales_initialize`).&quot;&quot;&quot;</span>
+
+<span class="n">RTL_LOCALES</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+<span class="sd">&quot;&quot;&quot;List of *Right-To-Left* locales e.g. &#39;he&#39; or &#39;fa-IR&#39; (see</span>
+<span class="sd">:py:obj:`locales_initialize`).&quot;&quot;&quot;</span>
+
+<span class="n">ADDITIONAL_TRANSLATIONS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;oc&quot;</span><span class="p">:</span> <span class="s2">&quot;Occitan&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;szl&quot;</span><span class="p">:</span> <span class="s2">&quot;Ślōnski (Silesian)&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+<span class="sd">&quot;&quot;&quot;Additional languages SearXNG has translations for but not supported by</span>
+<span class="sd">python-babel (see :py:obj:`locales_initialize`).&quot;&quot;&quot;</span>
+
+<span class="n">LOCALE_BEST_MATCH</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;oc&quot;</span><span class="p">:</span> <span class="s1">&#39;fr-FR&#39;</span><span class="p">,</span>
+    <span class="s2">&quot;szl&quot;</span><span class="p">:</span> <span class="s2">&quot;pl&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;nl-BE&quot;</span><span class="p">:</span> <span class="s2">&quot;nl&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;zh-HK&quot;</span><span class="p">:</span> <span class="s2">&quot;zh-Hant-TW&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+<span class="sd">&quot;&quot;&quot;Map a locale we do not have a translations for to a locale we have a</span>
+<span class="sd">translation for. By example: use Taiwan version of the translation for Hong</span>
+<span class="sd">Kong.&quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">localeselector</span><span class="p">():</span>
+    <span class="n">locale</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span>
+    <span class="k">if</span> <span class="n">has_request_context</span><span class="p">():</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">flask</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">preferences</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="s1">&#39;locale&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
+            <span class="n">locale</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="c1"># first, set the language that is not supported by babel</span>
+    <span class="k">if</span> <span class="n">locale</span> <span class="ow">in</span> <span class="n">ADDITIONAL_TRANSLATIONS</span><span class="p">:</span>
+        <span class="n">flask</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="p">[</span><span class="s1">&#39;use-translation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">locale</span>
+
+    <span class="c1"># second, map locale to a value python-babel supports</span>
+    <span class="n">locale</span> <span class="o">=</span> <span class="n">LOCALE_BEST_MATCH</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">locale</span><span class="p">,</span> <span class="n">locale</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">locale</span> <span class="o">==</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+        <span class="c1"># if there is an error loading the preferences</span>
+        <span class="c1"># the locale is going to be &#39;&#39;</span>
+        <span class="n">locale</span> <span class="o">=</span> <span class="s1">&#39;en&#39;</span>
+
+    <span class="c1"># babel uses underscore instead of hyphen.</span>
+    <span class="n">locale</span> <span class="o">=</span> <span class="n">locale</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">locale</span>
+
+
+<div class="viewcode-block" id="get_translations"><a class="viewcode-back" href="../../src/searx.locales.html#searx.locales.get_translations">[docs]</a><span class="k">def</span> <span class="nf">get_translations</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Monkey patch of :py:obj:`flask_babel.get_translations`&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">has_request_context</span><span class="p">()</span> <span class="ow">and</span> <span class="n">flask</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;use-translation&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;oc&#39;</span><span class="p">:</span>
+        <span class="n">babel_ext</span> <span class="o">=</span> <span class="n">flask_babel</span><span class="o">.</span><span class="n">current_app</span><span class="o">.</span><span class="n">extensions</span><span class="p">[</span><span class="s1">&#39;babel&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">Translations</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">babel_ext</span><span class="o">.</span><span class="n">translation_directories</span><span class="p">),</span> <span class="s1">&#39;oc&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">has_request_context</span><span class="p">()</span> <span class="ow">and</span> <span class="n">flask</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;use-translation&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;szl&#39;</span><span class="p">:</span>
+        <span class="n">babel_ext</span> <span class="o">=</span> <span class="n">flask_babel</span><span class="o">.</span><span class="n">current_app</span><span class="o">.</span><span class="n">extensions</span><span class="p">[</span><span class="s1">&#39;babel&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">Translations</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="n">babel_ext</span><span class="o">.</span><span class="n">translation_directories</span><span class="p">),</span> <span class="s1">&#39;szl&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_flask_babel_get_translations</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="get_locale_descr"><a class="viewcode-back" href="../../src/searx.locales.html#searx.locales.get_locale_descr">[docs]</a><span class="k">def</span> <span class="nf">get_locale_descr</span><span class="p">(</span><span class="n">locale</span><span class="p">,</span> <span class="n">locale_name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get locale name e.g. &#39;Français - fr&#39; or &#39;Português (Brasil) - pt-BR&#39;</span>
+
+<span class="sd">    :param locale: instance of :py:class:`Locale`</span>
+<span class="sd">    :param locale_name: name e.g. &#39;fr&#39;  or &#39;pt_BR&#39; (delimiter is *underscore*)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">native_language</span><span class="p">,</span> <span class="n">native_territory</span> <span class="o">=</span> <span class="n">_get_locale_descr</span><span class="p">(</span><span class="n">locale</span><span class="p">,</span> <span class="n">locale_name</span><span class="p">)</span>
+    <span class="n">english_language</span><span class="p">,</span> <span class="n">english_territory</span> <span class="o">=</span> <span class="n">_get_locale_descr</span><span class="p">(</span><span class="n">locale</span><span class="p">,</span> <span class="s1">&#39;en&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">native_territory</span> <span class="o">==</span> <span class="n">english_territory</span><span class="p">:</span>
+        <span class="n">english_territory</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">native_territory</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">english_territory</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">native_language</span> <span class="o">==</span> <span class="n">english_language</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">native_language</span>
+        <span class="k">return</span> <span class="n">native_language</span> <span class="o">+</span> <span class="s1">&#39; (&#39;</span> <span class="o">+</span> <span class="n">english_language</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">native_language</span> <span class="o">+</span> <span class="s1">&#39;, &#39;</span> <span class="o">+</span> <span class="n">native_territory</span> <span class="o">+</span> <span class="s1">&#39; (&#39;</span> <span class="o">+</span> <span class="n">english_language</span>
+    <span class="k">if</span> <span class="n">english_territory</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">result</span> <span class="o">+</span> <span class="s1">&#39;, &#39;</span> <span class="o">+</span> <span class="n">english_territory</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+    <span class="k">return</span> <span class="n">result</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span></div>
+
+
+<span class="k">def</span> <span class="nf">_get_locale_descr</span><span class="p">(</span><span class="n">locale</span><span class="p">,</span> <span class="n">language_code</span><span class="p">):</span>
+    <span class="n">language_name</span> <span class="o">=</span> <span class="n">locale</span><span class="o">.</span><span class="n">get_language_name</span><span class="p">(</span><span class="n">language_code</span><span class="p">)</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">language_name</span> <span class="ow">and</span> <span class="p">(</span><span class="s1">&#39;a&#39;</span> <span class="o">&lt;=</span> <span class="n">language_name</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="s1">&#39;z&#39;</span><span class="p">):</span>
+        <span class="n">language_name</span> <span class="o">=</span> <span class="n">language_name</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span>
+    <span class="n">terrirtory_name</span> <span class="o">=</span> <span class="n">locale</span><span class="o">.</span><span class="n">get_territory_name</span><span class="p">(</span><span class="n">language_code</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">language_name</span><span class="p">,</span> <span class="n">terrirtory_name</span>
+
+
+<div class="viewcode-block" id="locales_initialize"><a class="viewcode-back" href="../../src/searx.locales.html#searx.locales.locales_initialize">[docs]</a><span class="k">def</span> <span class="nf">locales_initialize</span><span class="p">(</span><span class="n">directory</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Initialize locales environment of the SearXNG session.</span>
+
+<span class="sd">    - monkey patch :py:obj:`flask_babel.get_translations` by :py:obj:`get_translations`</span>
+<span class="sd">    - init global names :py:obj:`LOCALE_NAMES`, :py:obj:`RTL_LOCALES`</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">directory</span> <span class="o">=</span> <span class="n">directory</span> <span class="ow">or</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s1">&#39;translations&#39;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;locales_initialize: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">directory</span><span class="p">)</span>
+    <span class="n">flask_babel</span><span class="o">.</span><span class="n">get_translations</span> <span class="o">=</span> <span class="n">get_translations</span>
+
+    <span class="k">for</span> <span class="n">tag</span><span class="p">,</span> <span class="n">descr</span> <span class="ow">in</span> <span class="n">ADDITIONAL_TRANSLATIONS</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">LOCALE_NAMES</span><span class="p">[</span><span class="n">tag</span><span class="p">]</span> <span class="o">=</span> <span class="n">descr</span>
+
+    <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">LOCALE_BEST_MATCH</span><span class="p">:</span>
+        <span class="n">descr</span> <span class="o">=</span> <span class="n">LOCALE_NAMES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">descr</span><span class="p">:</span>
+            <span class="n">locale</span> <span class="o">=</span> <span class="n">Locale</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">tag</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;-&#39;</span><span class="p">)</span>
+            <span class="n">LOCALE_NAMES</span><span class="p">[</span><span class="n">tag</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_locale_descr</span><span class="p">(</span><span class="n">locale</span><span class="p">,</span> <span class="n">tag</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">dirname</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">directory</span><span class="p">)):</span>
+        <span class="c1"># Based on https://flask-babel.tkte.ch/_modules/flask_babel.html#Babel.list_translations</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">directory</span><span class="p">,</span> <span class="n">dirname</span><span class="p">,</span> <span class="s1">&#39;LC_MESSAGES&#39;</span><span class="p">)):</span>
+            <span class="k">continue</span>
+        <span class="n">tag</span> <span class="o">=</span> <span class="n">dirname</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span>
+        <span class="n">descr</span> <span class="o">=</span> <span class="n">LOCALE_NAMES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">descr</span><span class="p">:</span>
+            <span class="n">locale</span> <span class="o">=</span> <span class="n">Locale</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">dirname</span><span class="p">)</span>
+            <span class="n">LOCALE_NAMES</span><span class="p">[</span><span class="n">tag</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_locale_descr</span><span class="p">(</span><span class="n">locale</span><span class="p">,</span> <span class="n">dirname</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">locale</span><span class="o">.</span><span class="n">text_direction</span> <span class="o">==</span> <span class="s1">&#39;rtl&#39;</span><span class="p">:</span>
+                <span class="n">RTL_LOCALES</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+  <span id="sidebar-top"></span>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  
+    
+            <p class="logo"><a href="../../index.html">
+              <img class="logo" src="../../_static/searxng-wordmark.svg" alt="Logo"/>
+            </a></p>
+  
+
+<h3><a href="../../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../user/index.html">User information</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../own-instance.html">Why use a private instance?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../admin/index.html">Administrator documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../dev/index.html">Developer documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../utils/index.html">Admin’s tooling box</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/index.html">Source-Code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../donate.html">Donate to searxng.org</a></li>
+</ul>
+
+  <h3>Project Links</h3>
+  <ul>
+    <li><a href="https://github.com/searxng/searxng/tree/master">Source</a>
+  
+    <li><a href="https://github.com/searxng/searxng/wiki">Wiki</a>
+  
+    <li><a href="https://searx.space">Public instances</a>
+  
+    <li><a href="https://github.com/searxng/searxng/issues">Issue Tracker</a>
+  </ul><h3>Navigation</h3>
+<ul>
+  <li><a href="../../index.html">Overview</a>
+    <ul>
+      <li><a href="../index.html">Module code</a>
+        
+          
+          </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+  
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2021 SearXNG team, 2015-2021 Adam Tauber, Noémi Ványi.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.5.0.
+    </div>
+  <script src="../../_static/version_warning_offset.js"></script>
+
+  </body>
+</html>

@@ -1,0 +1,355 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>searx.engines.google_images &#8212; SearXNG Documentation (2022.07.02-94e0555c)</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/searxng.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/tabs.css" />
+    <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/tabs.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">SearXNG Documentation (2022.07.02-94e0555c)</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="../engines.html" accesskey="U">searx.engines</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">searx.engines.google_images</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for searx.engines.google_images</h1><div class="highlight"><pre>
+<span></span><span class="c1"># SPDX-License-Identifier: AGPL-3.0-or-later</span>
+<span class="c1"># lint: pylint</span>
+<span class="sd">&quot;&quot;&quot;This is the implementation of the google images engine.</span>
+
+<span class="sd">.. admonition:: Content-Security-Policy (CSP)</span>
+
+<span class="sd">   This engine needs to allow images from the `data URLs`_ (prefixed with the</span>
+<span class="sd">   ``data:`` scheme)::</span>
+
+<span class="sd">       Header set Content-Security-Policy &quot;img-src &#39;self&#39; data: ;&quot;</span>
+
+<span class="sd">.. _data URLs:</span>
+<span class="sd">   https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">urllib.parse</span> <span class="kn">import</span> <span class="n">urlencode</span><span class="p">,</span> <span class="n">unquote</span>
+<span class="kn">from</span> <span class="nn">lxml</span> <span class="kn">import</span> <span class="n">html</span>
+
+<span class="kn">from</span> <span class="nn">searx.utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">eval_xpath</span><span class="p">,</span>
+    <span class="n">eval_xpath_list</span><span class="p">,</span>
+    <span class="n">eval_xpath_getindex</span><span class="p">,</span>
+    <span class="n">extract_text</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="kn">from</span> <span class="nn">searx.engines.google</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">get_lang_info</span><span class="p">,</span>
+    <span class="n">time_range_dict</span><span class="p">,</span>
+    <span class="n">detect_google_sorry</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># pylint: disable=unused-import</span>
+<span class="kn">from</span> <span class="nn">searx.engines.google</span> <span class="kn">import</span> <span class="n">supported_languages_url</span><span class="p">,</span> <span class="n">_fetch_supported_languages</span>
+
+<span class="c1"># pylint: enable=unused-import</span>
+
+<span class="c1"># about</span>
+<span class="n">about</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;website&quot;</span><span class="p">:</span> <span class="s1">&#39;https://images.google.com&#39;</span><span class="p">,</span>
+    <span class="s2">&quot;wikidata_id&quot;</span><span class="p">:</span> <span class="s1">&#39;Q521550&#39;</span><span class="p">,</span>
+    <span class="s2">&quot;official_api_documentation&quot;</span><span class="p">:</span> <span class="s1">&#39;https://developers.google.com/custom-search&#39;</span><span class="p">,</span>
+    <span class="s2">&quot;use_official_api&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;require_api_key&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;results&quot;</span><span class="p">:</span> <span class="s1">&#39;HTML&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1"># engine dependent config</span>
+<span class="n">categories</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="s1">&#39;web&#39;</span><span class="p">]</span>
+<span class="n">paging</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">use_locale_domain</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">time_range_support</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">safesearch</span> <span class="o">=</span> <span class="kc">True</span>
+
+<span class="n">filter_mapping</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">:</span> <span class="s1">&#39;images&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span> <span class="s1">&#39;active&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span> <span class="s1">&#39;active&#39;</span><span class="p">}</span>
+
+
+<div class="viewcode-block" id="scrap_out_thumbs"><a class="viewcode-back" href="../../../src/searx.engines.google.html#searx.engines.google_images.scrap_out_thumbs">[docs]</a><span class="k">def</span> <span class="nf">scrap_out_thumbs</span><span class="p">(</span><span class="n">dom</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Scrap out thumbnail data from &lt;script&gt; tags.&quot;&quot;&quot;</span>
+    <span class="n">ret_val</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">script</span> <span class="ow">in</span> <span class="n">eval_xpath</span><span class="p">(</span><span class="n">dom</span><span class="p">,</span> <span class="s1">&#39;//script[contains(., &quot;_setImgSrc(&quot;)]&#39;</span><span class="p">):</span>
+        <span class="n">_script</span> <span class="o">=</span> <span class="n">script</span><span class="o">.</span><span class="n">text</span>
+        <span class="c1"># _setImgSrc(&#39;0&#39;,&#39;data:image\/jpeg;base64,\/9j\/4AAQSkZJR ....&#39;);</span>
+        <span class="n">_thumb_no</span><span class="p">,</span> <span class="n">_img_data</span> <span class="o">=</span> <span class="n">_script</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;_setImgSrc(&quot;</span><span class="p">)</span> <span class="p">:</span> <span class="o">-</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">_thumb_no</span> <span class="o">=</span> <span class="n">_thumb_no</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">_img_data</span> <span class="o">=</span> <span class="n">_img_data</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">_img_data</span> <span class="o">=</span> <span class="n">_img_data</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\/&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="n">ret_val</span><span class="p">[</span><span class="n">_thumb_no</span><span class="p">]</span> <span class="o">=</span> <span class="n">_img_data</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\x3d&quot;</span><span class="p">,</span> <span class="s2">&quot;=&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ret_val</span></div>
+
+
+<span class="c1"># [0, &quot;-H96xjSoW5DsgM&quot;, [&quot;https://encrypted-tbn0.gstatic.com/images?q...&quot;, 155, 324]</span>
+<span class="c1"># , [&quot;https://assets.cdn.moviepilot.de/files/d3bf..&quot;, 576, 1200],</span>
+<span class="n">_RE_JS_IMAGE_URL</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+    <span class="sa">r</span><span class="s1">&#39;&quot;&#39;</span>
+    <span class="sa">r</span><span class="s1">&#39;([^&quot;]*)&#39;</span>  <span class="c1"># -H96xjSoW5DsgM</span>
+    <span class="sa">r</span><span class="s1">&#39;&quot;,\s*\[&quot;&#39;</span>
+    <span class="sa">r</span><span class="s1">&#39;https://[^\.]*\.gstatic.com/images[^&quot;]*&#39;</span>  <span class="c1"># https://encrypted-tbn0.gstatic.com/images?q...</span>
+    <span class="sa">r</span><span class="s1">&#39;[^\[]*\[&quot;&#39;</span>
+    <span class="sa">r</span><span class="s1">&#39;(https?://[^&quot;]*)&#39;</span>  <span class="c1"># https://assets.cdn.moviepilot.de/files/d3bf...</span>
+<span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">parse_urls_img_from_js</span><span class="p">(</span><span class="n">dom</span><span class="p">):</span>
+
+    <span class="c1"># There are two HTML script tags starting with a JS function</span>
+    <span class="c1"># &#39;AF_initDataCallback(...)&#39;</span>
+    <span class="c1">#</span>
+    <span class="c1"># &lt;script nonce=&quot;zscm+Ab/JzBk1Qd4GY6wGQ&quot;&gt;</span>
+    <span class="c1">#   AF_initDataCallback({key: &#39;ds:0&#39;, hash: &#39;1&#39;, data:[], sideChannel: {}});</span>
+    <span class="c1"># &lt;/script&gt;</span>
+    <span class="c1"># &lt;script nonce=&quot;zscm+Ab/JzBk1Qd4GY6wGQ&quot;&gt;</span>
+    <span class="c1">#   AF_initDataCallback({key: &#39;ds:1&#39;, hash: &#39;2&#39;, data:[null,[[[&quot;online_chips&quot;,[[&quot;the big&quot;,</span>
+    <span class="c1">#     [&quot;https://encrypted-tbn0.gstatic.com/images?q...&quot;,null,null,true,[null,0],f</span>
+    <span class="c1">#   ...</span>
+    <span class="c1"># &lt;/script&gt;</span>
+    <span class="c1">#</span>
+    <span class="c1"># The second script contains the URLs of the images.</span>
+
+    <span class="c1"># The AF_initDataCallback(..) is called with very large dictionary, that</span>
+    <span class="c1"># looks like JSON but it is not JSON since it contains JS variables and</span>
+    <span class="c1"># constants like &#39;null&#39; (we can&#39;t use a JSON parser for).</span>
+    <span class="c1">#</span>
+    <span class="c1"># The alternative is to parse the entire &lt;script&gt; and find all image URLs by</span>
+    <span class="c1"># a regular expression.</span>
+
+    <span class="n">img_src_script</span> <span class="o">=</span> <span class="n">eval_xpath_getindex</span><span class="p">(</span><span class="n">dom</span><span class="p">,</span> <span class="s1">&#39;//script[contains(., &quot;AF_initDataCallback({key: &quot;)]&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">text</span>
+    <span class="n">data_id_to_img_url</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">data_id</span><span class="p">,</span> <span class="n">url</span> <span class="ow">in</span> <span class="n">_RE_JS_IMAGE_URL</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">img_src_script</span><span class="p">):</span>
+        <span class="n">data_id_to_img_url</span><span class="p">[</span><span class="n">data_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">url</span>
+    <span class="k">return</span> <span class="n">data_id_to_img_url</span>
+
+
+<div class="viewcode-block" id="get_img_url_by_data_id"><a class="viewcode-back" href="../../../src/searx.engines.google.html#searx.engines.google_images.get_img_url_by_data_id">[docs]</a><span class="k">def</span> <span class="nf">get_img_url_by_data_id</span><span class="p">(</span><span class="n">data_id_to_img_url</span><span class="p">,</span> <span class="n">img_node</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get full image URL by @data-id from parent element.&quot;&quot;&quot;</span>
+
+    <span class="n">data_id</span> <span class="o">=</span> <span class="n">eval_xpath_getindex</span><span class="p">(</span><span class="n">img_node</span><span class="p">,</span> <span class="s1">&#39;../../../@data-id&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">img_url</span> <span class="o">=</span> <span class="n">data_id_to_img_url</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">data_id</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+    <span class="n">img_url</span> <span class="o">=</span> <span class="n">unquote</span><span class="p">(</span><span class="n">img_url</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;\u00&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39;%&#39;</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">img_url</span></div>
+
+
+<div class="viewcode-block" id="request"><a class="viewcode-back" href="../../../src/searx.engines.google.html#searx.engines.google_images.request">[docs]</a><span class="k">def</span> <span class="nf">request</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Google-Video search request&quot;&quot;&quot;</span>
+
+    <span class="n">lang_info</span> <span class="o">=</span> <span class="n">get_lang_info</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">supported_languages</span><span class="p">,</span> <span class="n">language_aliases</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;HTTP header Accept-Language --&gt; </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">lang_info</span><span class="p">[</span><span class="s1">&#39;headers&#39;</span><span class="p">][</span><span class="s1">&#39;Accept-Language&#39;</span><span class="p">])</span>
+
+    <span class="n">query_url</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;https://&#39;</span>
+        <span class="o">+</span> <span class="n">lang_info</span><span class="p">[</span><span class="s1">&#39;subdomain&#39;</span><span class="p">]</span>
+        <span class="o">+</span> <span class="s1">&#39;/search&#39;</span>
+        <span class="o">+</span> <span class="s2">&quot;?&quot;</span>
+        <span class="o">+</span> <span class="n">urlencode</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s1">&#39;q&#39;</span><span class="p">:</span> <span class="n">query</span><span class="p">,</span>
+                <span class="s1">&#39;tbm&#39;</span><span class="p">:</span> <span class="s2">&quot;isch&quot;</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">lang_info</span><span class="p">[</span><span class="s1">&#39;params&#39;</span><span class="p">],</span>
+                <span class="s1">&#39;ie&#39;</span><span class="p">:</span> <span class="s2">&quot;utf8&quot;</span><span class="p">,</span>
+                <span class="s1">&#39;oe&#39;</span><span class="p">:</span> <span class="s2">&quot;utf8&quot;</span><span class="p">,</span>
+                <span class="s1">&#39;num&#39;</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;time_range&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">time_range_dict</span><span class="p">:</span>
+        <span class="n">query_url</span> <span class="o">+=</span> <span class="s1">&#39;&amp;&#39;</span> <span class="o">+</span> <span class="n">urlencode</span><span class="p">({</span><span class="s1">&#39;tbs&#39;</span><span class="p">:</span> <span class="s1">&#39;qdr:&#39;</span> <span class="o">+</span> <span class="n">time_range_dict</span><span class="p">[</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;time_range&#39;</span><span class="p">]]})</span>
+    <span class="k">if</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;safesearch&#39;</span><span class="p">]:</span>
+        <span class="n">query_url</span> <span class="o">+=</span> <span class="s1">&#39;&amp;&#39;</span> <span class="o">+</span> <span class="n">urlencode</span><span class="p">({</span><span class="s1">&#39;safe&#39;</span><span class="p">:</span> <span class="n">filter_mapping</span><span class="p">[</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;safesearch&#39;</span><span class="p">]]})</span>
+    <span class="n">params</span><span class="p">[</span><span class="s1">&#39;url&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">query_url</span>
+
+    <span class="n">params</span><span class="p">[</span><span class="s1">&#39;headers&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">lang_info</span><span class="p">[</span><span class="s1">&#39;headers&#39;</span><span class="p">])</span>
+    <span class="n">params</span><span class="p">[</span><span class="s1">&#39;headers&#39;</span><span class="p">][</span><span class="s1">&#39;Accept&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8&#39;</span>
+    <span class="k">return</span> <span class="n">params</span></div>
+
+
+<div class="viewcode-block" id="response"><a class="viewcode-back" href="../../../src/searx.engines.google.html#searx.engines.google_images.response">[docs]</a><span class="k">def</span> <span class="nf">response</span><span class="p">(</span><span class="n">resp</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get response from google&#39;s search request&quot;&quot;&quot;</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">detect_google_sorry</span><span class="p">(</span><span class="n">resp</span><span class="p">)</span>
+
+    <span class="c1"># convert the text to dom</span>
+    <span class="n">dom</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">fromstring</span><span class="p">(</span><span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+    <span class="n">img_bas64_map</span> <span class="o">=</span> <span class="n">scrap_out_thumbs</span><span class="p">(</span><span class="n">dom</span><span class="p">)</span>
+    <span class="n">data_id_to_img_url</span> <span class="o">=</span> <span class="n">parse_urls_img_from_js</span><span class="p">(</span><span class="n">dom</span><span class="p">)</span>
+
+    <span class="c1"># parse results</span>
+    <span class="c1">#</span>
+    <span class="c1"># root element::</span>
+    <span class="c1">#     &lt;div id=&quot;islmp&quot; ..&gt;</span>
+    <span class="c1"># result div per image::</span>
+    <span class="c1">#     &lt;div jsmodel=&quot;tTXmib&quot;&gt; / &lt;div jsaction=&quot;...&quot; data-id=&quot;...&quot;</span>
+    <span class="c1">#     The data-id matches to a item in a json-data structure in::</span>
+    <span class="c1">#         &lt;script nonce=&quot;I+vqelcy/01CKiBJi5Z1Ow&quot;&gt;AF_initDataCallback({key: &#39;ds:1&#39;, ... data:function(){return [ ...</span>
+    <span class="c1">#     In this structure the link to the origin PNG, JPG or whatever is given</span>
+    <span class="c1"># first link per image-div contains a &lt;img&gt; with the data-iid for bas64 encoded image data::</span>
+    <span class="c1">#      &lt;img class=&quot;rg_i Q4LuWd&quot; data-iid=&quot;0&quot;</span>
+    <span class="c1"># second link per image-div is the target link::</span>
+    <span class="c1">#      &lt;a class=&quot;VFACy kGQAp&quot; href=&quot;https://en.wikipedia.org/wiki/The_Sacrament_of_the_Last_Supper&quot;&gt;</span>
+    <span class="c1"># the second link also contains two div tags with the *description* and *publisher*::</span>
+    <span class="c1">#      &lt;div class=&quot;WGvvNb&quot;&gt;The Sacrament of the Last Supper ...&lt;/div&gt;</span>
+    <span class="c1">#      &lt;div class=&quot;fxgdke&quot;&gt;en.wikipedia.org&lt;/div&gt;</span>
+
+    <span class="n">root</span> <span class="o">=</span> <span class="n">eval_xpath</span><span class="p">(</span><span class="n">dom</span><span class="p">,</span> <span class="s1">&#39;//div[@id=&quot;islmp&quot;]&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">root</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;did not find root element id=&#39;islmp&#39;&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span>
+
+    <span class="n">root</span> <span class="o">=</span> <span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">img_node</span> <span class="ow">in</span> <span class="n">eval_xpath_list</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="s1">&#39;.//img[contains(@class, &quot;rg_i&quot;)]&#39;</span><span class="p">):</span>
+
+        <span class="n">img_alt</span> <span class="o">=</span> <span class="n">eval_xpath_getindex</span><span class="p">(</span><span class="n">img_node</span><span class="p">,</span> <span class="s1">&#39;@alt&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">img_base64_id</span> <span class="o">=</span> <span class="n">eval_xpath</span><span class="p">(</span><span class="n">img_node</span><span class="p">,</span> <span class="s1">&#39;@data-iid&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">img_base64_id</span><span class="p">:</span>
+            <span class="n">img_base64_id</span> <span class="o">=</span> <span class="n">img_base64_id</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">thumbnail_src</span> <span class="o">=</span> <span class="n">img_bas64_map</span><span class="p">[</span><span class="n">img_base64_id</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">thumbnail_src</span> <span class="o">=</span> <span class="n">eval_xpath</span><span class="p">(</span><span class="n">img_node</span><span class="p">,</span> <span class="s1">&#39;@src&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">thumbnail_src</span><span class="p">:</span>
+                <span class="n">thumbnail_src</span> <span class="o">=</span> <span class="n">eval_xpath</span><span class="p">(</span><span class="n">img_node</span><span class="p">,</span> <span class="s1">&#39;@data-src&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">thumbnail_src</span><span class="p">:</span>
+                <span class="n">thumbnail_src</span> <span class="o">=</span> <span class="n">thumbnail_src</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">thumbnail_src</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+
+        <span class="n">link_node</span> <span class="o">=</span> <span class="n">eval_xpath_getindex</span><span class="p">(</span><span class="n">img_node</span><span class="p">,</span> <span class="s1">&#39;../../../a[2]&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="n">eval_xpath_getindex</span><span class="p">(</span><span class="n">link_node</span><span class="p">,</span> <span class="s1">&#39;@href&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">url</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;missing @href in node: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">html</span><span class="o">.</span><span class="n">tostring</span><span class="p">(</span><span class="n">link_node</span><span class="p">))</span>
+            <span class="k">continue</span>
+
+        <span class="n">pub_nodes</span> <span class="o">=</span> <span class="n">eval_xpath</span><span class="p">(</span><span class="n">link_node</span><span class="p">,</span> <span class="s1">&#39;./div/div&#39;</span><span class="p">)</span>
+        <span class="n">pub_descr</span> <span class="o">=</span> <span class="n">img_alt</span>
+        <span class="n">pub_source</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">pub_nodes</span><span class="p">:</span>
+            <span class="n">pub_descr</span> <span class="o">=</span> <span class="n">extract_text</span><span class="p">(</span><span class="n">pub_nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">pub_source</span> <span class="o">=</span> <span class="n">extract_text</span><span class="p">(</span><span class="n">pub_nodes</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="n">src_url</span> <span class="o">=</span> <span class="n">get_img_url_by_data_id</span><span class="p">(</span><span class="n">data_id_to_img_url</span><span class="p">,</span> <span class="n">img_node</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">src_url</span><span class="p">:</span>
+            <span class="n">src_url</span> <span class="o">=</span> <span class="n">thumbnail_src</span>
+
+        <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s1">&#39;url&#39;</span><span class="p">:</span> <span class="n">url</span><span class="p">,</span>
+                <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="n">img_alt</span><span class="p">,</span>
+                <span class="s1">&#39;content&#39;</span><span class="p">:</span> <span class="n">pub_descr</span><span class="p">,</span>
+                <span class="s1">&#39;source&#39;</span><span class="p">:</span> <span class="n">pub_source</span><span class="p">,</span>
+                <span class="s1">&#39;img_src&#39;</span><span class="p">:</span> <span class="n">src_url</span><span class="p">,</span>
+                <span class="s1">&#39;thumbnail_src&#39;</span><span class="p">:</span> <span class="n">thumbnail_src</span><span class="p">,</span>
+                <span class="s1">&#39;template&#39;</span><span class="p">:</span> <span class="s1">&#39;images.html&#39;</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">results</span></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+  <span id="sidebar-top"></span>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  
+    
+            <p class="logo"><a href="../../../index.html">
+              <img class="logo" src="../../../_static/searxng-wordmark.svg" alt="Logo"/>
+            </a></p>
+  
+
+<h3><a href="../../../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user/index.html">User information</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../own-instance.html">Why use a private instance?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../admin/index.html">Administrator documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../dev/index.html">Developer documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../utils/index.html">Admin’s tooling box</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../src/index.html">Source-Code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../donate.html">Donate to searxng.org</a></li>
+</ul>
+
+  <h3>Project Links</h3>
+  <ul>
+    <li><a href="https://github.com/searxng/searxng/tree/master">Source</a>
+  
+    <li><a href="https://github.com/searxng/searxng/wiki">Wiki</a>
+  
+    <li><a href="https://searx.space">Public instances</a>
+  
+    <li><a href="https://github.com/searxng/searxng/issues">Issue Tracker</a>
+  </ul><h3>Navigation</h3>
+<ul>
+  <li><a href="../../../index.html">Overview</a>
+    <ul>
+      <li><a href="../../index.html">Module code</a>
+        <ul>
+      <li><a href="../engines.html">searx.engines</a>
+        
+          
+          </ul>
+      </li></ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+  
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2021 SearXNG team, 2015-2021 Adam Tauber, Noémi Ványi.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.5.0.
+    </div>
+  <script src="../../../_static/version_warning_offset.js"></script>
+
+  </body>
+</html>

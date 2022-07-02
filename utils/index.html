@@ -1,0 +1,245 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin’s tooling box &#8212; SearXNG Documentation (2022.07.02-94e0555c)</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/searxng.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/tabs.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="utils/searx.sh" href="searx.sh.html" />
+    <link rel="prev" title="searxng_extra/standalone_searx.py" href="../dev/searxng_extra/standalone_searx.py.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="searx.sh.html" title="utils/searx.sh"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../dev/searxng_extra/standalone_searx.py.html" title="searxng_extra/standalone_searx.py"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">SearXNG Documentation (2022.07.02-94e0555c)</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Admin’s tooling box</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="admin-s-tooling-box">
+<span id="toolboxing"></span><span id="searx-utils"></span><h1>Admin’s tooling box<a class="headerlink" href="#admin-s-tooling-box" title="Permalink to this headline">¶</a></h1>
+<p>In the folder <a class="reference external" href="https://github.com/searxng/searxng/blob/master/utils/">git://utils/</a> we maintain some tools useful for administrators.</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="searx.sh.html"><code class="docutils literal notranslate"><span class="pre">utils/searx.sh</span></code></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="searx.sh.html#install">Install</a></li>
+<li class="toctree-l2"><a class="reference internal" href="searx.sh.html#overview">Overview</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="filtron.sh.html"><code class="docutils literal notranslate"><span class="pre">utils/filtron.sh</span></code></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="filtron.sh.html#create-user">Create user</a></li>
+<li class="toctree-l2"><a class="reference internal" href="filtron.sh.html#install-go">Install go</a></li>
+<li class="toctree-l2"><a class="reference internal" href="filtron.sh.html#install-filtron">Install filtron</a></li>
+<li class="toctree-l2"><a class="reference internal" href="filtron.sh.html#overview">Overview</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="morty.sh.html"><code class="docutils literal notranslate"><span class="pre">utils/morty.sh</span></code></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="morty.sh.html#create-user">Create user</a></li>
+<li class="toctree-l2"><a class="reference internal" href="morty.sh.html#install-go">Install go</a></li>
+<li class="toctree-l2"><a class="reference internal" href="morty.sh.html#install-morty">Install morty</a></li>
+<li class="toctree-l2"><a class="reference internal" href="morty.sh.html#overview">Overview</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lxc.sh.html"><code class="docutils literal notranslate"><span class="pre">utils/lxc.sh</span></code></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lxc.sh.html#internet-connectivity-docker">Internet Connectivity &amp; Docker</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lxc.sh.html#install-suite">Install suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lxc.sh.html#running-commands">Running commands</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lxc.sh.html#setup-searxng-buildhost">Setup SearXNG buildhost</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lxc.sh.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="lxc.sh.html#searxng-suite">SearXNG suite</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<section id="common-commands-environment">
+<span id="toolboxing-common"></span><h2>Common commands &amp; environment<a class="headerlink" href="#common-commands-environment" title="Permalink to this headline">¶</a></h2>
+<p>Scripts to maintain services often dispose of common commands and environments.</p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">shell</span></code><span class="classifier">command</span></dt><dd><p>Opens a shell from the service user <code class="docutils literal notranslate"><span class="pre">${SERVICE_USSR}</span></code>, very helpful for
+troubleshooting.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">inspect</span> <span class="pre">service</span></code><span class="classifier">command</span></dt><dd><p>Shows status and log of the service, most often you have a option to enable
+more verbose debug logs.  Very helpful for debugging, but be careful not to
+enable debugging in a production environment!</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">FORCE_TIMEOUT</span></code><span class="classifier">environment</span></dt><dd><p>Sets timeout for interactive prompts. If you want to run a script in batch
+job, with defaults choices, set <code class="docutils literal notranslate"><span class="pre">FORCE_TIMEOUT=0</span></code>.  By example; to install a
+reverse proxy for filtron on all containers of the <a class="reference internal" href="lxc.sh.html#lxc-searx-env"><span class="std std-ref">SearXNG suite</span></a> use</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="o">-</span><span class="n">H</span> <span class="o">./</span><span class="n">utils</span><span class="o">/</span><span class="n">lxc</span><span class="o">.</span><span class="n">sh</span> <span class="n">cmd</span> <span class="o">--</span> <span class="n">FORCE_TIMEOUT</span><span class="o">=</span><span class="mi">0</span> <span class="o">./</span><span class="n">utils</span><span class="o">/</span><span class="n">filtron</span><span class="o">.</span><span class="n">sh</span> <span class="n">apache</span> <span class="n">install</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</section>
+<section id="tooling-box-setup">
+<span id="toolboxing-setup"></span><h2>Tooling box setup<a class="headerlink" href="#tooling-box-setup" title="Permalink to this headline">¶</a></h2>
+<p>The main setup is done in the <a class="reference external" href="https://github.com/searxng/searxng/blob/master/.config.sh">git://.config.sh</a> (read also <a class="reference internal" href="../admin/engines/settings.html#settings-global"><span class="std std-ref">Global Settings</span></a>).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># -*- coding: utf-8; mode: sh -*-</span>
+<span class="c1"># SPDX-License-Identifier: AGPL-3.0-or-later</span>
+<span class="c1"># shellcheck shell=bash disable=SC2034</span>
+<span class="c1">#</span>
+<span class="c1"># This file should be edited only ones just before the installation of any</span>
+<span class="c1"># service is done.  After the installation of the searx service a copy of this</span>
+<span class="c1"># file is placed into the $SEARX_SRC of the instance, e.g.::</span>
+<span class="c1">#</span>
+<span class="c1">#     /usr/local/searx/searx-src/.config.sh</span>
+<span class="c1">#</span>
+<span class="c1"># .. hint::</span>
+<span class="c1">#</span>
+<span class="c1">#    Before you change a value here, You have to fully uninstall any previous</span>
+<span class="c1">#    installation of searx, morty and filtron services!</span>
+
+<span class="c1"># utils/searx.sh</span>
+<span class="c1"># --------------</span>
+
+<span class="c1"># The setup of the SearXNG instance is done in the settings.yml</span>
+<span class="c1"># (SEARXNG_SETTINGS_PATH).  Read the remarks in [1] carefully and don&#39;t forget to</span>
+<span class="c1"># rebuild instance&#39;s environment (make buildenv) if needed.  The settings.yml</span>
+<span class="c1"># file of an already installed instance is shown by::</span>
+<span class="c1">#</span>
+<span class="c1">#     $ ./utils/searx.sh --help</span>
+<span class="c1">#     ---- SearXNG instance setup (already installed)</span>
+<span class="c1">#       SEARXNG_SETTINGS_PATH : /etc/searxng/settings.yml</span>
+<span class="c1">#       SEARX_SRC             : /usr/local/searx/searx-src</span>
+<span class="c1">#</span>
+<span class="c1"># [1] https://docs.searxng.org/admin/engines/settings.html</span>
+
+<span class="c1"># utils/filtron.sh</span>
+<span class="c1"># ----------------</span>
+
+<span class="c1"># FILTRON_API=&quot;127.0.0.1:4005&quot;</span>
+<span class="c1"># FILTRON_LISTEN=&quot;127.0.0.1:4004&quot;</span>
+
+<span class="c1"># utils/morty.sh</span>
+<span class="c1"># --------------</span>
+
+<span class="c1"># morty listen address</span>
+<span class="c1"># MORTY_LISTEN=&quot;127.0.0.1:3000&quot;</span>
+<span class="c1"># PUBLIC_URL_PATH_MORTY=&quot;/morty/&quot;</span>
+
+<span class="c1"># system services</span>
+<span class="c1"># ---------------</span>
+
+<span class="c1"># Common $HOME folder of the service accounts</span>
+<span class="c1"># SERVICE_HOME_BASE=&quot;/usr/local&quot;</span>
+
+<span class="c1"># **experimental**: Set SERVICE_USER to run all services by one account, but be</span>
+<span class="c1"># aware that removing discrete components might conflict!</span>
+<span class="c1"># SERVICE_USER=searx</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+  <span id="sidebar-top"></span>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  
+    
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/searxng-wordmark.svg" alt="Logo"/>
+            </a></p>
+  
+
+<h3><a href="../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../user/index.html">User information</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../own-instance.html">Why use a private instance?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../admin/index.html">Administrator documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dev/index.html">Developer documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Admin’s tooling box</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="searx.sh.html"><code class="docutils literal notranslate"><span class="pre">utils/searx.sh</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="filtron.sh.html"><code class="docutils literal notranslate"><span class="pre">utils/filtron.sh</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="morty.sh.html"><code class="docutils literal notranslate"><span class="pre">utils/morty.sh</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lxc.sh.html"><code class="docutils literal notranslate"><span class="pre">utils/lxc.sh</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#common-commands-environment">Common commands &amp; environment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tooling-box-setup">Tooling box setup</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../src/index.html">Source-Code</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../donate.html">Donate to searxng.org</a></li>
+</ul>
+
+  <h3>Project Links</h3>
+  <ul>
+    <li><a href="https://github.com/searxng/searxng/tree/master">Source</a>
+  
+    <li><a href="https://github.com/searxng/searxng/wiki">Wiki</a>
+  
+    <li><a href="https://searx.space">Public instances</a>
+  
+    <li><a href="https://github.com/searxng/searxng/issues">Issue Tracker</a>
+  </ul><h3>Navigation</h3>
+<ul>
+  <li><a href="../index.html">Overview</a>
+    <ul>
+          <li>Previous: <a href="../dev/searxng_extra/standalone_searx.py.html" title="previous chapter"><code class="docutils literal notranslate"><span class="pre">searxng_extra/standalone_searx.py</span></code></a>
+          <li>Next: <a href="searx.sh.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">utils/searx.sh</span></code></a>
+    </ul>
+  </li>
+</ul>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/utils/index.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+  
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2021 SearXNG team, 2015-2021 Adam Tauber, Noémi Ványi.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.5.0.
+    </div>
+  <script src="../_static/version_warning_offset.js"></script>
+
+  </body>
+</html>
